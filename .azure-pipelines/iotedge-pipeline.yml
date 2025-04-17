@@ -1,0 +1,75 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  ACR_NAME: '<<Your ACR>>""
+  ACR_USERNAME: '<<Your ACR Username>>'
+
+stages:
+- stage: BuildAndPush
+  displayName: 'Build and Push IoT Edge Modules'
+  jobs:
+  - job: BuildModules
+    displayName: 'Build and Push Modules to ACR'
+    steps:
+
+    - task: AzureKeyVault@2
+      name: FetchSecrets
+      inputs:
+        azureSubscription: '<<Your Connection>>'
+        keyVaultName: '<<Your Keyvault>>'
+        secretsFilter: 'acrpassword'
+
+    - task: DockerInstaller@0
+      displayName: 'Install Docker'
+
+    - script: |
+        echo "$(acrpassword)" | docker login $ACR_NAME.azurecr.io -u $ACR_USERNAME --password-stdin
+
+        docker build -t $ACR_NAME.azurecr.io/temp_simulator:$(Build.BuildId) modules/temp_simulator
+        docker push $ACR_NAME.azurecr.io/temp_simulator:$(Build.BuildId)
+      displayName: 'Build and Push Temp Simulator'
+      env:
+        acrpassword: $(acrpassword)
+
+    - script: |
+        chmod +x modules/predictor/model.eim
+        echo "$(acrpassword)" | docker login $ACR_NAME.azurecr.io -u $ACR_USERNAME --password-stdin
+
+        docker build -t $ACR_NAME.azurecr.io/predictor:$(Build.BuildId) modules/predictor
+        docker push $ACR_NAME.azurecr.io/predictor:$(Build.BuildId)
+      displayName: 'Fix permissions and Build + Push Predictor'
+      env:
+        acrpassword: $(acrpassword)
+
+    - script: |
+        echo "🔄 Updating deployment manifest with build ID: $(Build.BuildId)"
+        sed "s|\${BUILD_ID}|$(Build.BuildId)|g" deployments/deployment.template.json > deployments/deployment.json
+        
+      displayName: 'Generate Deployment Manifest with Build ID'
+
+    - task: AzureCLI@2
+      displayName: 'Deploy to IoT Edge Device'
+      inputs:
+        azureSubscription: 'edge-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "📍 Current working directory:"
+          pwd
+          echo "📁 Listing all files for verification:"
+          ls -R
+          echo "📄 Deployment content:"
+          cat deployments/deployment.json
+
+          echo "🚀 Deploying to IoT Edge device..."
+          az iot edge set-modules \
+            --device-id devopsdevice2 \
+            --hub-name edgehub1 \
+            --content "$(System.DefaultWorkingDirectory)/deployments/deployment.json"
+#comment

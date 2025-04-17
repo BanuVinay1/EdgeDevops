@@ -1,0 +1,7 @@
+edge_impulse_linux
+azure-iot-device
+numpy
+pyaudio
+six
+opencv-python-headless
+psutil

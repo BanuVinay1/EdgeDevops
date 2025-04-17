@@ -1,0 +1,86 @@
+{
+    "modulesContent": {
+      "$edgeAgent": {
+        "properties.desired": {
+          "schemaVersion": "1.1",
+          "runtime": {
+            "type": "docker",
+            "settings": {
+              "registryCredentials": {
+                "banuacr": {
+                  "address": "<<Your ACR URL>>",
+                  "username": "<<Your ACR Name>>",
+                  "password": "<<Your ACR Password>>"
+                }
+              }
+            }
+          },
+          "systemModules": {
+            "edgeAgent": {
+              "type": "docker",
+              "settings": {
+                "image": "mcr.microsoft.com/azureiotedge-agent:1.5"
+              }
+            },
+            "edgeHub": {
+              "type": "docker",
+              "restartPolicy": "always",
+              "settings": {
+                "image": "mcr.microsoft.com/azureiotedge-hub:1.5",
+                "createOptions": "{\"HostConfig\":{\"PortBindings\":{\"443/tcp\":[{\"HostPort\":\"443\"}],\"5671/tcp\":[{\"HostPort\":\"5671\"}],\"8883/tcp\":[{\"HostPort\":\"8883\"}]}}}"
+              },
+              "status": "running"
+            }
+          },
+          "modules": {
+            "temp_simulator": {
+              "type": "docker",
+              "settings": {
+                "image": "banuacr.azurecr.io/temp_simulator:${BUILD_ID}"
+              },
+              "restartPolicy": "always",
+              "status": "running"
+            },
+            "predictor": {
+              "type": "docker",
+              "settings": {
+                "image": "banuacr.azurecr.io/predictor:${BUILD_ID}"
+              },
+              "restartPolicy": "always",
+              "status": "running"
+            }
+          }
+        }
+      },
+      "$edgeHub": {
+        "properties.desired": {
+          "schemaVersion": "1.1",
+          "storeAndForwardConfiguration": {
+            "timeToLiveSecs": 7200
+          },
+          "routes": {
+            "tempToPredictor": "FROM /messages/modules/temp_simulator/outputs/output1 INTO BrokeredEndpoint(\"/modules/predictor/inputs/input1\")",
+            "predictorToIoTHub": "FROM /messages/modules/predictor/outputs/output1 INTO $upstream"
+          }
+        }
+      },
+      "temp_simulator": {
+        "properties.desired": {
+          "outputs": {
+            "output1": {}
+          }
+        }
+      },
+      "predictor": {
+        "properties.desired": {
+          "inputs": {
+            "input1": {}
+          },
+          "outputs": {
+            "output1": {}
+          }
+        }
+      }
+    }
+  }
+  
